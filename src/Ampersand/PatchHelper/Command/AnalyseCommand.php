@@ -88,13 +88,19 @@ class AnalyseCommand extends Command
 
         $autoPatched = [];
         $manualChecks = [];
+        $messages =  [];
         foreach ($summaryOutputData as $fileToPatch) {
             if ($fileToPatch[0] === 'Override (phtml/js/html)') {
                 $fileToPatch[1] = rtrim($projectDir, '/') . '/' . $fileToPatch[1];
                 $patchFile = rtrim($projectDir, '/'). '/patches/' . md5(str_replace('/', '_', $fileToPatch[1])) . '.patch';
                 xdiff_file_diff(str_replace('vendor/', 'vendor_orig/', $fileToPatch[1]), $fileToPatch[1], $patchFile);
                 $patching = rtrim($projectDir, '/') . '/' . $fileToPatch[2];
-                if (xdiff_file_patch($patching, $patchFile, $patching . '.patched')) {
+                $result = xdiff_file_patch($patching, $patchFile, $patching . '.patched');
+                if (is_string($result)) {
+                    $messages[$fileToPatch[1]] = $result;
+                }
+
+                if ($result === true) {
                     $unpatchedFile = file_get_contents($patching);
                     $patchedFile = file_get_contents($patching . '.patched');
                     if ($unpatchedFile !== $patchedFile) {
@@ -124,6 +130,15 @@ class AnalyseCommand extends Command
         $outputTable->setHeaders(['Leftovers! Type', 'Core', 'To Check']);
         $outputTable->addRows($manualChecks);
         $outputTable->render();
+
+        if (count($messages) > 1) {
+            $output->writeln('Some patches were partially applied and had errors:');
+            foreach ($messages as $file => $message) {
+                $output->writeln(sprintf('File: %s', $file));
+                $output->writeln(sprintf('Message: %s', $message));
+                $output->writeln('--------------------------------------');
+            }
+        }
 
         $countToCheck = count($summaryOutputData);
         $newPatchFilePath = rtrim($projectDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'vendor_files_to_check.patch';
