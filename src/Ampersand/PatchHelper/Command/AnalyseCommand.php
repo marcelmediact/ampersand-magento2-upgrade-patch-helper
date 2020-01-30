@@ -86,6 +86,45 @@ class AnalyseCommand extends Command
         $outputTable->addRows($summaryOutputData);
         $outputTable->render();
 
+        $autoPatched = [];
+        $manualChecks = [];
+        foreach ($summaryOutputData as $fileToPatch) {
+            if ($fileToPatch[0] === 'Override (phtml/js/html)') {
+                $fileToPatch[1] = rtrim($projectDir, '/') . '/' . $fileToPatch[1];
+                $patchFile = rtrim($projectDir, '/'). '/patches/' . md5(str_replace('/', '_', $fileToPatch[1])) . '.patch';
+                xdiff_file_diff(str_replace('vendor/', 'vendor_orig/', $fileToPatch[1]), $fileToPatch[1], $patchFile);
+                $patching = rtrim($projectDir, '/') . '/' . $fileToPatch[2];
+                if (xdiff_file_patch($patching, $patchFile, $patching . '.patched')) {
+                    $unpatchedFile = file_get_contents($patching);
+                    $patchedFile = file_get_contents($patching . '.patched');
+                    if ($unpatchedFile !== $patchedFile) {
+                        unlink($patching);
+                        unlink($patchFile);
+                        rename($patching. '.patched', $patching);
+                        $autoPatched[] = [$fileToPatch[2]];
+                    } else {
+                        rename($patchFile, $patching . '.patch');
+                        unlink($patching . '.patched');
+                        $manualChecks[] = $fileToPatch;
+                    }
+                } else {
+                    $manualChecks[] = $fileToPatch;
+                }
+            } else {
+                $manualChecks[] = $fileToPatch;
+            }
+        }
+
+        $outputTable = new Table($output);
+        $outputTable->setHeaders(['Automatically patched files']);
+        $outputTable->addRows($autoPatched);
+        $outputTable->render();
+
+        $outputTable = new Table($output);
+        $outputTable->setHeaders(['Leftovers! Type', 'Core', 'To Check']);
+        $outputTable->addRows($manualChecks);
+        $outputTable->render();
+
         $countToCheck = count($summaryOutputData);
         $newPatchFilePath = rtrim($projectDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'vendor_files_to_check.patch';
         $output->writeln("<comment>You should review the above $countToCheck items alongside $newPatchFilePath</comment>");

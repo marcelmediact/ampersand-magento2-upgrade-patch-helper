@@ -93,3 +93,72 @@ This will output a grid of files which have overrides/preferences/plugins that n
 +--------------------------+---------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------+
 You should review the above 19 items alongside /path/to/magento2/vendor_files_to_check.patch
 ```
+---
+# Customizations
+# Partial automation of Magento 2 Upgrades for templates
+
+This guide will help setup an assist for upgrading Magento 2 to a new version.
+
+## Install XDiff
+
+Run the following set of command to install libxdiff:
+```bash
+cd /usr/src
+wget http://www.xmailserver.org/libxdiff-0.23.tar.gz
+sudo tar -xzf libxdiff-0.23.tar.gz
+cd libxdiff-0.23
+sudo ./configure
+sudo make
+sudo make install
+```
+
+Then check if `php`, `phpize` and `php-config` are all on the same version as the PHP version you're trying to install php-xdiff for.
+Run the command:
+
+```bash
+sudo pecl install xdiff
+```
+
+To install xdiff for your current PHP version.
+
+Then create `xdiff.ini` file in `/etc/php/<version>/mods-available` with the following contents:
+```bash
+extension=xdiff.so
+```
+
+Active the xdiff extension by running:
+```bash
+sudo phpenmod xdiff
+```
+
+Xdiff is now installed and activated for your current PHP version.
+
+## Using the Ampersand tool
+
+Clone this repository and run `composer install` inside the directory.
+
+Then go to the directory of your Magento 2 project you wish to upgrade.
+Run `composer install` in that project (before upgrading) and make sure it runs on your local machine.
+
+Run the command `mv vendor/ vendor_orig/` to create a backup of your vendor directory (Ampersand uses this to compare the files).
+
+Then proceed to adjust your `composer.json` file to upgrade Magento to the required version.
+Then run `composer update <changed-packages-here> --with-dependencies`.
+
+Run the command: `diff -ur vendor_orig/ vendor/ > vendor.patch` to create a diff file of the vendor directory of your Magento 2 project.
+
+And finally from the command line (inside the Ampersand project) run the command:
+`php bin/patch-helper.php analyse /path/to/magento2/`
+
+This command will automatically try to patch as much as possible templates for you. The leftovers will be shown in the terminal after execution.
+
+**Beware:** The automatically patched files can have some parts that cannot be automatically patched, therefore you still need to manually verify them.
+
+**Beware 2:** before committing make sure that all `.patch` files in your `app/design` directory are removed. The patch files that are located next to each un-appliable template file are helpers for the upgrade (so you can check the differences). 
+
+After you have checked every patch you can remove the patches so you won't commit them.
+
+```
+cd app/design
+find . -name "*.patch" -type f -delete
+```
